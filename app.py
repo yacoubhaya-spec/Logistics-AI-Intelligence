@@ -1,536 +1,154 @@
-
-import urllib.parse
+import base64, html, urllib.parse
 from datetime import datetime, timezone
-
+from pathlib import Path
 import altair as alt
 import feedparser
 import pandas as pd
 import streamlit as st
 from streamlit_autorefresh import st_autorefresh
 
-st.set_page_config(
-    page_title="CEVA AI Competitor Intelligence",
-    page_icon="📡",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
+st.set_page_config(page_title='CEVA AI Intelligence Dashboard', page_icon='📡', layout='wide', initial_sidebar_state='collapsed')
+st_autorefresh(interval=60*60*1000, key='hourly_rerun')
 
-# Hourly rerun while open; source queries themselves are cached for 24 hours.
-st_autorefresh(interval=60 * 60 * 1000, key="hourly_rerun")
-
-BLUE = "#0B3A82"
-RED = "#D62828"
-SOFT_BLUE = "#EEF4FB"
-SOFT_RED = "#FDEEEE"
-BORDER = "#D9E1EA"
-MUTED = "#64748B"
-
+BLUE='#0B3A82'; RED='#D62828'; MUTED='#64748B'
 st.markdown("""
 <style>
-.block-container {padding-top: .8rem; padding-bottom: 2rem; max-width: 1650px;}
-html, body, [class*="css"] {font-family: Inter, Arial, sans-serif;}
-h1,h2,h3 {color:#0B3A82;}
-a {color:#1E5AA8; text-decoration:none;}
-a:hover {color:#D62828;}
-
-.hero {
-  display:flex; justify-content:space-between; align-items:flex-end;
-  border-bottom:5px solid #D62828; padding:8px 2px 14px 2px; margin-bottom:10px;
-}
-.hero-title {font-size:2.15rem;font-weight:850;color:#0B3A82;letter-spacing:-.025em;}
-.hero-sub {font-size:.98rem;color:#64748B;}
-.hero-updated {text-align:right;color:#64748B;font-size:.78rem;}
-
-.logo-strip {
-  display:flex; align-items:center; justify-content:space-between; gap:20px;
-  border:1px solid #D9E1EA; border-radius:12px; background:#fff;
-  padding:10px 18px; margin:8px 0 14px 0;
-}
-.logo-cell {flex:1;text-align:center;min-width:105px;font-weight:800;color:#0B3A82;}
-.logo-cell img {height:38px;max-width:145px;object-fit:contain;}
-
-.kpi {
-  border:1px solid #D9E1EA;border-radius:12px;background:#fff;
-  padding:13px 15px 12px;min-height:88px;position:relative;
-}
-.kpi:before {
-  content:"";position:absolute;left:0;right:0;top:0;height:5px;
-  background:#0B3A82;border-radius:12px 12px 0 0;
-}
-.kpi.red:before {background:#D62828;}
-.kpi-label {font-size:.80rem;color:#64748B;}
-.kpi-value {font-size:1.75rem;font-weight:850;color:#0B3A82;margin-top:3px;}
-.kpi.red .kpi-value {color:#D62828;}
-
-.valuechain-title {font-size:.92rem;font-weight:800;color:#0B3A82;margin:13px 0 5px;}
-div[role="radiogroup"] {display:flex;gap:5px;flex-wrap:wrap;}
-div[role="radiogroup"] label {
-  border:1px solid #D9E1EA;border-radius:9px;padding:5px 8px;background:#F7FAFE;
-}
-div[role="radiogroup"] label:has(input:checked) {
-  background:#FDEEEE;border-color:#D62828;color:#A61B1B;font-weight:750;
-}
-
-.news-card {
-  border:1px solid #D9E1EA;border-radius:12px;background:#fff;
-  padding:13px 15px;margin:0 0 10px 0;
-}
-.news-card.priority {border-left:7px solid #D62828;}
-.news-card.normal {border-left:7px solid #0B3A82;}
-.news-title {font-size:1.02rem;font-weight:800;color:#1F2937;margin-top:5px;}
-.news-meta {font-size:.8rem;color:#64748B;margin:3px 0 7px;}
-.tag {
-  display:inline-block;padding:3px 8px;border-radius:999px;margin:2px 4px 2px 0;
-  font-size:.70rem;background:#EEF4FB;color:#0B3A82;
-}
-.tag-red {background:#FDEEEE;color:#A61B1B;}
-.badge-green {
-  display:inline-block;padding:3px 8px;border-radius:999px;
-  background:#EAF7EF;color:#176B3A;font-size:.70rem;font-weight:750;
-}
-.implication {
-  margin-top:8px;padding:9px 11px;border-radius:8px;
-  background:#EEF4FB;color:#0B3A82;
-}
-.implication.priority {background:#FDEEEE;color:#A61B1B;}
-
-section[data-testid="stSidebar"] {
-  background:linear-gradient(180deg,#F7FAFE 0%,#FFFFFF 100%);
-  border-right:1px solid #D9E1EA;
-}
-section[data-testid="stSidebar"] h2,
-section[data-testid="stSidebar"] h3 {color:#0B3A82;}
-
-.stButton>button,.stDownloadButton>button {
-  border:1px solid #0B3A82;color:#0B3A82;border-radius:8px;
-}
-.stButton>button:hover,.stDownloadButton>button:hover {
-  border-color:#D62828;color:#D62828;
-}
+.block-container{padding-top:.6rem;padding-bottom:2rem;max-width:1750px}html,body,[class*=css]{font-family:Inter,Arial,sans-serif}h1,h2,h3{color:#0B3A82}a{color:#1E5AA8;text-decoration:none}a:hover{color:#D62828}.hero{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:5px solid #D62828;padding:7px 4px 12px;margin-bottom:8px}.hero-title{font-size:2rem;font-weight:850;color:#0B3A82}.hero-sub{font-size:.95rem;color:#64748B}.hero-meta{text-align:right;color:#64748B;font-size:.77rem}.ticker-wrap{display:flex;align-items:center;background:#0B3A82;color:#fff;border-radius:10px;overflow:hidden;margin:7px 0 12px}.ticker-label{flex:0 0 auto;background:#D62828;color:#fff;font-weight:850;padding:11px 16px}.ticker-window{overflow:hidden;white-space:nowrap;flex:1}.ticker-track{display:inline-block;padding-left:100%;animation:tickerMove 55s linear infinite}.ticker-track:hover{animation-play-state:paused}.ticker-item{display:inline-block;margin-right:42px;font-size:.83rem}.ticker-item a{color:#fff;font-weight:650}.ticker-new{background:#D62828;color:#fff;border-radius:5px;padding:2px 6px;margin-right:6px;font-size:.68rem;font-weight:800}@keyframes tickerMove{from{transform:translateX(0)}to{transform:translateX(-100%)}}.competitor-grid{display:grid;grid-template-columns:repeat(7,minmax(110px,1fr));gap:7px;margin:7px 0 12px}.competitor-card{border:1px solid #D9E1EA;background:#fff;border-radius:10px;padding:7px;min-height:79px;display:flex;align-items:center;justify-content:center;transition:.15s}.competitor-card:hover{border-color:#D62828;transform:translateY(-1px)}.competitor-card.selected{border:3px solid #D62828;background:#FDEEEE}.competitor-card img{width:100%;height:58px;object-fit:contain}.all-card{font-weight:850;color:#0B3A82;font-size:.9rem;text-align:center}.section-title{color:#0B3A82;font-weight:850;font-size:.93rem;margin:9px 0 5px}.kpi{border:1px solid #D9E1EA;border-radius:11px;background:#fff;padding:12px 14px;min-height:86px;position:relative}.kpi:before{content:'';position:absolute;top:0;left:0;right:0;height:5px;background:#0B3A82;border-radius:11px 11px 0 0}.kpi.red:before{background:#D62828}.kpi-label{font-size:.77rem;color:#64748B}.kpi-value{font-size:1.65rem;font-weight:850;color:#0B3A82;margin-top:3px}.kpi.red .kpi-value{color:#D62828}.source-head{border-radius:10px;padding:12px 14px;color:#fff;font-weight:850;margin-bottom:9px}.source-head.blue{background:#0B3A82}.source-head.red{background:#D62828}.source-sub{font-size:.78rem;font-weight:500;margin-top:2px}.news-card{border:1px solid #D9E1EA;border-radius:10px;background:#fff;padding:12px 13px;margin-bottom:9px}.news-card.official{border-left:6px solid #0B3A82}.news-card.media{border-left:6px solid #D62828}.news-card.consulting{border-left:6px solid #0B3A82}.news-title{font-weight:800;color:#1F2937;font-size:.98rem;margin:5px 0 2px}.news-meta{color:#64748B;font-size:.78rem;margin-bottom:6px}.tag{display:inline-block;border-radius:999px;padding:3px 7px;margin:2px 4px 2px 0;font-size:.68rem;background:#EEF4FB;color:#0B3A82}.tag.red{background:#FDEEEE;color:#A61B1B}.badge{display:inline-block;border-radius:5px;padding:3px 6px;font-size:.67rem;font-weight:800;color:#fff;background:#0B3A82}.badge.red{background:#D62828}.takeaway{background:#EEF4FB;border-left:5px solid #D62828;border-radius:9px;padding:11px 13px;margin-top:10px;color:#0B3A82}button[data-baseweb=tab]{font-weight:750;color:#0B3A82}button[data-baseweb=tab][aria-selected=true]{color:#D62828!important}.stButton>button{border:1px solid #0B3A82;color:#0B3A82;border-radius:8px}.stButton>button:hover{border-color:#D62828;color:#D62828}@media(max-width:1100px){.competitor-grid{grid-template-columns:repeat(4,minmax(110px,1fr))}}@media(max-width:700px){.competitor-grid{grid-template-columns:repeat(2,minmax(110px,1fr))}}
 </style>
 """, unsafe_allow_html=True)
 
-COMPETITORS = ["Kuehne+Nagel","DHL Global Forwarding","DSV","Sinotrans","Nippon Express"]
+COMPETITORS=['Kuehne+Nagel','DSV','DHL Global Forwarding','Sinotrans','Nippon Express','Expeditors','C.H. Robinson','KLN / Kerry Logistics','GEODIS','COSCO Shipping Logistics','Maersk Logistics','Hellmann Worldwide Logistics','Kintetsu World Express','UPS Supply Chain Solutions','Yusen Logistics','DACHSER','LX Pantos','CTS International Logistics','Rhenus Logistics','AWOT Group']
+VALUE_CHAIN=['All steps','Booking & pricing','Docs & compliance','Collection & consolidation','Customs clearance (origin)','Security & handling','Air / ocean transport','Customs clearance (dest.)','Decons. & delivery','Audit & settlement']
+OFFICIAL_DOMAINS={'Kuehne+Nagel':'newsroom.kuehne-nagel.com','DSV':'dsv.com','DHL Global Forwarding':'group.dhl.com','Sinotrans':'sinotrans.com','Nippon Express':'nipponexpress-holdings.com','Expeditors':'expeditors.com','C.H. Robinson':'chrobinson.com','KLN / Kerry Logistics':'kln.com','GEODIS':'geodis.com','COSCO Shipping Logistics':'coscoshipping.com','Maersk Logistics':'maersk.com','Hellmann Worldwide Logistics':'hellmann.com','Kintetsu World Express':'kwe.com','UPS Supply Chain Solutions':'about.ups.com','Yusen Logistics':'yusen-logistics.com','DACHSER':'dachser.com','LX Pantos':'lxpantos.com','CTS International Logistics':'ctic.com','Rhenus Logistics':'rhenus.group','AWOT Group':'awotglobal.com'}
+PRESS=[('Reuters','reuters.com'),('Financial Times','ft.com'),('FreightWaves','freightwaves.com'),('The Loadstar','theloadstar.com'),('Journal of Commerce','joc.com'),('Air Cargo News','aircargonews.net'),('Supply Chain Dive','supplychaindive.com'),('Logistics Management','logisticsmgmt.com')]
+CONSULTING=[('McKinsey & Company','mckinsey.com'),('BCG','bcg.com'),('Bain & Company','bain.com'),('Deloitte','deloitte.com'),('PwC','pwc.com'),('EY','ey.com'),('KPMG','kpmg.com'),('Accenture','accenture.com'),('Gartner','gartner.com'),('S&P Global','spglobal.com'),('Transport Intelligence','ti-insight.com'),('Drewry','drewry.co.uk'),('Xeneta','xeneta.com'),('World Economic Forum','weforum.org')]
+AI='(AI OR "artificial intelligence" OR "agentic AI" OR "generative AI" OR automation OR autonomous OR "machine learning" OR robotics OR digital)'
+LOGISTICS='("freight forwarding" OR logistics OR "air freight" OR "ocean freight" OR customs OR "supply chain")'
 
-# Public brand assets for visual identification.
-LOGOS = {
-    "Kuehne+Nagel":"https://upload.wikimedia.org/wikipedia/commons/6/6b/Kuehne_%2B_Nagel_logo.svg",
-    "DHL Global Forwarding":"https://upload.wikimedia.org/wikipedia/commons/a/ac/DHL_Logo.svg",
-    "DSV":"https://upload.wikimedia.org/wikipedia/commons/7/7d/DSV_Logo.svg",
-    "Nippon Express":"https://upload.wikimedia.org/wikipedia/commons/6/69/NX_logo.svg",
-}
+def slug(s): return s.lower().replace('+','plus').replace('&','and').replace('/','-').replace(' ','_').replace('.','').replace('__','_')
+def data_uri(path): return 'data:image/svg+xml;base64,'+base64.b64encode(path.read_bytes()).decode('ascii')
+LOGO_DIR=Path(__file__).parent/'assets'/'logos'
+LOGOS={c:data_uri(LOGO_DIR/f'{slug(c)}.svg') for c in COMPETITORS if (LOGO_DIR/f'{slug(c)}.svg').exists()}
 
-VALUE_CHAIN_STEPS = [
-    "All steps",
-    "Booking & pricing",
-    "Docs & compliance",
-    "Collection & consolidation",
-    "Customs clearance (origin)",
-    "Security & handling",
-    "Air / ocean transport",
-    "Customs clearance (dest.)",
-    "Decons. & delivery",
-    "Audit & settlement",
-]
-
-VERIFIED = [
-    {
-        "date":"2026-10-01","company":"Kuehne+Nagel","initiative":"Chennai Tech Centre",
-        "technology":"AI / proprietary digital products","process":"Technology & product development",
-        "stage":"Scaling capability",
-        "evidence":"Kuehne+Nagel opened a new engineering centre to expand development and scaling of proprietary digital logistics solutions as demand for AI solutions grows.",
-        "metric":"New global technology centre","source_type":"Official company news",
-        "source":"Kuehne+Nagel Newsroom",
-        "url":"https://newsroom.kuehne-nagel.com/kuehnenagel-opens-chennai-tech-centre-as-demand-for-digital-logistics-and-ai-solutions-grows/",
-        "ceva":"Track internal engineering capacity as a competitive capability: ownership of AI products, speed from pilot to production and global scaling.",
-        "priority":"Neutral",
-        "value_chain":["Docs & compliance","Collection & consolidation","Air / ocean transport"],
-    },
-    {
-        "date":"2026-09-24","company":"DHL Global Forwarding","initiative":"Logistics Trend Radar 8.0",
-        "technology":"Agentic AI / AI analytics","process":"Planning, decision-making & execution",
-        "stage":"Strategic direction",
-        "evidence":"DHL identifies Agentic AI as a major logistics trend, moving AI from assistance toward systems capable of planning, coordinating and acting across workflows.",
-        "metric":"Agentic AI elevated as a major logistics trend",
-        "source_type":"Official DHL report/news","source":"DHL Group",
-        "url":"https://group.dhl.com/en/media-relations/press-releases/2026/ai-takes-action-while-people-remain-at-the-center-of-logistics-finds-dhl-logistics-trend-radar.html",
-        "ceva":"Separate simple copilots from autonomous agents in CEVA's roadmap and identify which forwarding activities can safely move from recommendation to execution.",
-        "priority":"Priority",
-        "value_chain":["Booking & pricing","Docs & compliance","Collection & consolidation","Customs clearance (origin)","Security & handling","Air / ocean transport","Customs clearance (dest.)","Decons. & delivery","Audit & settlement"],
-    },
-    {
-        "date":"2026-09-17","company":"DHL Global Forwarding","initiative":"TradeNavigator",
-        "technology":"Natural-language AI analytics","process":"Customs & trade compliance",
-        "stage":"Launched",
-        "evidence":"Customers can query customs declaration data in natural language and receive analytics on duty spend, tariff exposure, clearance performance and compliance trends.",
-        "metric":"4,000+ customs experts • 30,000+ declarations/day",
-        "source_type":"Official company press release","source":"DHL Group",
-        "url":"https://group.dhl.com/en/media-relations/press-releases/2026/dhl-global-forwarding-launches-tradenavigator-tool.html",
-        "ceva":"Customs data is becoming a customer-facing decision product. Benchmark conversational access to CEVA customs and trade data.",
-        "priority":"Priority",
-        "value_chain":["Customs clearance (origin)","Customs clearance (dest.)"],
-    },
-    {
-        "date":"2026-09-10","company":"DHL Global Forwarding","initiative":"Alibaba.com / Accio integration",
-        "technology":"Agentic AI / API integration","process":"Quotation, booking & shipment execution",
-        "stage":"MoU / integration exploration",
-        "evidence":"DHL Global Forwarding plans to connect quotation and booking capabilities with Alibaba.com's Accio agentic AI platform for SMEs.",
-        "metric":"Forwarding quotation and booking embedded into an external AI-commerce environment",
-        "source_type":"Official company press release","source":"DHL Group",
-        "url":"https://group.dhl.com/en/media-relations/press-releases/2026/dhl-and-alibaba-com-partner-to-bring-ai-powered-logistics-capabilities-to-small-and-medium-sized-enterprises-worldwide.html",
-        "ceva":"A direct commercial signal: freight procurement can move inside external AI agents. Track CEVA API readiness, instant-quote coverage and embedded-forwarding partnerships.",
-        "priority":"Priority",
-        "value_chain":["Booking & pricing"],
-    },
-    {
-        "date":"2026-08-19","company":"Nippon Express","initiative":"BI LLM Chat in DCX",
-        "technology":"Generative AI / LLM","process":"Customer analytics & decision support",
-        "stage":"Launched",
-        "evidence":"Nippon Express added an LLM chat capability to its DCX logistics web application so users can interact with logistics data and external information.",
-        "metric":"Customer-facing conversational logistics analytics",
-        "source_type":"Official company press release","source":"Nippon Express Holdings",
-        "url":"https://www.nipponexpress-holdings.com/ja/press/768",
-        "ceva":"Benchmark customer-facing GenAI rather than only internal productivity tools: conversational access to shipment, inventory and market intelligence.",
-        "priority":"Neutral",
-        "value_chain":["Booking & pricing","Air / ocean transport","Audit & settlement"],
-    },
-    {
-        "date":"2026-07-23","company":"Kuehne+Nagel","initiative":"Accelerated AI deployment",
-        "technology":"AI agents / operational AI","process":"Enterprise operations",
-        "stage":"Scaling",
-        "evidence":"Kuehne+Nagel states that it is accelerating AI deployment across the organisation, including process optimisation and integration of AI agents.",
-        "metric":"AI explicitly tied to measurable efficiency gains",
-        "source_type":"Official Q2 results","source":"Kuehne+Nagel",
-        "url":"https://newsroom.kuehne-nagel.com/kuehnenagel-reports-strong-second-quarter-2026/",
-        "ceva":"Track AI with process and P&L-linked productivity measures rather than treating deployments as isolated innovation pilots.",
-        "priority":"Priority",
-        "value_chain":["Booking & pricing","Docs & compliance","Collection & consolidation","Customs clearance (origin)","Security & handling","Air / ocean transport","Customs clearance (dest.)","Decons. & delivery","Audit & settlement"],
-    },
-    {
-        "date":"2026-07-16","company":"Kuehne+Nagel","initiative":"KN SwiftLOG cloud-native rollout",
-        "technology":"Agentic AI-enabled WMS","process":"Contract logistics / warehousing",
-        "stage":"Global rollout",
-        "evidence":"KN SwiftLOG is being evolved into a cloud-native, agentic-AI-enabled platform based on Blue Yonder technology.",
-        "metric":"1,000+ sites • nearly 100 countries",
-        "source_type":"Official company press release","source":"Kuehne+Nagel",
-        "url":"https://newsroom.kuehne-nagel.com/kuehnenagel-rolls-out-cloud-native-contract-logistics-solution-across-over-1000-sites-globally/",
-        "ceva":"A common digital backbone enables AI to scale consistently. Compare CEVA platform standardisation, interoperability and deployment speed.",
-        "priority":"Neutral",
-        "value_chain":["Collection & consolidation","Security & handling","Decons. & delivery"],
-    },
-    {
-        "date":"2026-05-14","company":"Nippon Express","initiative":"DCX AI shipment forecasting upgrade",
-        "technology":"Predictive AI","process":"Inventory & shipment forecasting",
-        "stage":"Enhanced production service",
-        "evidence":"Nippon Express upgraded AI shipment forecasting in DCX Business Insight, integrating shipment forecasts with inventory and order analytics.",
-        "metric":"~1–2 hours/item → ~5 minutes • forecasts up to 6 months",
-        "source_type":"Official company press release","source":"Nippon Express Holdings",
-        "url":"https://www.nipponexpress-holdings.com/ja/news/press/2026/20260514-1.html",
-        "ceva":"Benchmark forecast latency, horizon, accuracy and—most importantly—the link from prediction to operational decisions.",
-        "priority":"Neutral",
-        "value_chain":["Air / ocean transport"],
-    },
-    {
-        "date":"2026-05-13","company":"DSV","initiative":"Autonomous freight operations in Texas",
-        "technology":"Autonomous driving","process":"Road linehaul",
-        "stage":"Commercial operation",
-        "evidence":"DSV and Volvo Autonomous Solutions began autonomous freight operations between Dallas and Houston using Volvo VNL Autonomous trucks.",
-        "metric":"Commercial autonomous freight lane",
-        "source_type":"Official company press release","source":"DSV",
-        "url":"https://www.dsv.com/en/about-dsv/press/news/volvo-autonomous-solutions-and-dsv-announce-autonomous-freight-2628152",
-        "ceva":"A physical-automation signal relevant to CEVA's broader transport network and autonomous capacity strategy.",
-        "priority":"Neutral",
-        "value_chain":["Decons. & delivery"],
-    },
-    {
-        "date":"2026-05-12","company":"DSV","initiative":"Leverage to Lead 2030",
-        "technology":"AI & technology","process":"Enterprise productivity / network optimisation",
-        "stage":"Strategic priority",
-        "evidence":"DSV's 2030 strategy explicitly targets productivity improvement from artificial intelligence and technology after the Schenker integration.",
-        "metric":"AI embedded in 2030 strategic priorities",
-        "source_type":"Investor / regulatory announcement","source":"DSV Investor Relations",
-        "url":"https://investor.dsv.com/node/25211",
-        "ceva":"Watch whether the Schenker integration gives DSV larger shared datasets, systems consolidation and faster AI scaling.",
-        "priority":"Priority",
-        "value_chain":["Booking & pricing","Docs & compliance","Collection & consolidation","Customs clearance (origin)","Security & handling","Air / ocean transport","Customs clearance (dest.)","Decons. & delivery","Audit & settlement"],
-    },
-    {
-        "date":"2026-03-30","company":"Sinotrans","initiative":"AI + Logistics operating model",
-        "technology":"AI / autonomous driving / robotic automation","process":"End-to-end logistics operations",
-        "stage":"Scaled multi-use-case deployment",
-        "evidence":"Sinotrans' annual reporting describes AI + Logistics as a core smart-logistics model spanning smart ports, warehouses, customer service and autonomous driving.",
-        "metric":"236 valid patents • 428 software copyrights • >3.5m km L4 autonomous-driving mileage",
-        "source_type":"Annual report / HKEX filing","source":"Sinotrans / HKEX",
-        "url":"https://www1.hkexnews.hk/listedco/listconews/sehk/2026/0330/2026033002104.pdf",
-        "ceva":"Benchmark the breadth of CEVA's AI portfolio, IP ownership and scaled deployment metrics—not only the number of pilots.",
-        "priority":"Priority",
-        "value_chain":["Booking & pricing","Docs & compliance","Collection & consolidation","Customs clearance (origin)","Security & handling","Air / ocean transport","Customs clearance (dest.)","Decons. & delivery","Audit & settlement"],
-    },
-    {
-        "date":"2026-01-16","company":"Nippon Express","initiative":"Digital showroom",
-        "technology":"Digital twin","process":"Solution design / sales / operational improvement",
-        "stage":"Launched",
-        "evidence":"Nippon Express introduced a virtual logistics showroom using digital-twin technology for solution co-creation, sales proposals and operational improvement.",
-        "metric":"Digital twin applied to customer solutioning",
-        "source_type":"Official company press release","source":"Nippon Express Holdings",
-        "url":"https://www.nipponexpress-holdings.com/ja/news/press/2026/20260116-1.html",
-        "ceva":"Digital twins can make pre-sales modelling and warehouse/flow redesign more tangible and faster.",
-        "priority":"Neutral",
-        "value_chain":["Collection & consolidation","Security & handling","Decons. & delivery"],
-    },
-]
-
-OFFICIAL_SEARCHES = {
-    "Kuehne+Nagel": 'site:newsroom.kuehne-nagel.com (AI OR "artificial intelligence" OR agentic OR automation OR digital)',
-    "DHL Global Forwarding": 'site:group.dhl.com "DHL Global Forwarding" (AI OR "artificial intelligence" OR agentic OR automation)',
-    "DSV": 'site:dsv.com DSV (AI OR "artificial intelligence" OR autonomous OR technology)',
-    "Nippon Express": 'site:nipponexpress-holdings.com (AI OR LLM OR "digital twin" OR automation)',
-    "Sinotrans": 'Sinotrans ("artificial intelligence" OR AI OR autonomous OR "smart logistics")',
-}
-
-def rss(query):
-    return "https://news.google.com/rss/search?q=" + urllib.parse.quote(query) + "&hl=en&gl=US&ceid=US:en"
-
-@st.cache_data(ttl=86400, show_spinner=False)
-def fetch_official(query, company):
-    feed = feedparser.parse(rss(query))
-    rows = []
-    for entry in feed.entries[:30]:
-        dt = datetime(*entry.published_parsed[:6], tzinfo=timezone.utc) if getattr(entry, "published_parsed", None) else datetime.now(timezone.utc)
-        publisher = ""
-        if getattr(entry, "source", None):
-            try:
-                publisher = entry.source.get("title","")
-            except Exception:
-                pass
-        rows.append({
-            "date": dt,
-            "company": company,
-            "title": entry.get("title","").strip(),
-            "url": entry.get("link",""),
-            "publisher": publisher or "Official-domain search",
-        })
+def rss(q): return 'https://news.google.com/rss/search?q='+urllib.parse.quote(q)+'&hl=en&gl=US&ceid=US:en'
+def detect_company(title):
+    t=(title or '').lower(); pats={'Kuehne+Nagel':['kuehne','kühne','k+n'],'DSV':['dsv'],'DHL Global Forwarding':['dhl'],'Sinotrans':['sinotrans'],'Nippon Express':['nippon express','nx group'],'Expeditors':['expeditors'],'C.H. Robinson':['c.h. robinson','ch robinson'],'KLN / Kerry Logistics':['kerry logistics','kln'],'GEODIS':['geodis'],'COSCO Shipping Logistics':['cosco'],'Maersk Logistics':['maersk'],'Hellmann Worldwide Logistics':['hellmann'],'Kintetsu World Express':['kintetsu','kwe'],'UPS Supply Chain Solutions':['ups supply chain','ups scs'],'Yusen Logistics':['yusen'],'DACHSER':['dachser'],'LX Pantos':['lx pantos','pantos'],'CTS International Logistics':['cts international'],'Rhenus Logistics':['rhenus'],'AWOT Group':['awot']}
+    for c,ps in pats.items():
+        if any(p in t for p in ps): return c
+    return 'Industry'
+def map_chain(title):
+    t=(title or '').lower(); out=[]
+    def add(x):
+        if x not in out: out.append(x)
+    if any(k in t for k in ['booking','quote','quotation','pricing','rate','procurement','commercial']): add('Booking & pricing')
+    if any(k in t for k in ['document','documentation','compliance','paperwork','invoice']): add('Docs & compliance')
+    if any(k in t for k in ['collection','consolidation','warehouse','inventory','wms','fulfilment','fulfillment']): add('Collection & consolidation')
+    if any(k in t for k in ['customs','tariff','duty','clearance','brokerage']): add('Customs clearance (origin)'); add('Customs clearance (dest.)')
+    if any(k in t for k in ['security','inspection','screening','handling']): add('Security & handling')
+    if any(k in t for k in ['air freight','ocean freight','sea freight','capacity','routing','route','eta','vessel','air cargo']): add('Air / ocean transport')
+    if any(k in t for k in ['delivery','last mile','deconsolidation','trucking','truck','distribution']): add('Decons. & delivery')
+    if any(k in t for k in ['audit','settlement','billing','payment','reconciliation']): add('Audit & settlement')
+    if any(k in t for k in ['agentic ai','digital transformation','ai strategy']): return VALUE_CHAIN[1:]
+    return out or ['Air / ocean transport']
+def parse(q,label,category,company=None,limit=10):
+    f=feedparser.parse(rss(q)); rows=[]
+    for e in f.entries[:limit]:
+        dt=datetime(*e.published_parsed[:6],tzinfo=timezone.utc) if getattr(e,'published_parsed',None) else datetime.now(timezone.utc)
+        pub=label
+        if getattr(e,'source',None):
+            try: pub=e.source.get('title','') or label
+            except: pass
+        title=e.get('title','').strip(); rows.append({'date':dt,'title':title,'url':e.get('link',''),'publisher':pub,'source_category':category,'company':company or detect_company(title)})
     return rows
+def derive(df):
+    if df.empty:return df
+    df['date']=pd.to_datetime(df['date'],utc=True); df['age_days']=(pd.Timestamp.now(tz='UTC')-df['date']).dt.total_seconds()/86400; df['value_chain']=df['title'].apply(map_chain)
+    return df.sort_values('date',ascending=False).drop_duplicates('title')
+@st.cache_data(ttl=86400,show_spinner=False)
+def fetch_official():
+    rows=[]
+    for c,d in OFFICIAL_DOMAINS.items(): rows+=parse(f'site:{d} "{c}" {AI}',c,'Official',c,8)
+    return derive(pd.DataFrame(rows))
+@st.cache_data(ttl=86400,show_spinner=False)
+def fetch_press():
+    names=' OR '.join('"'+c+'"' for c in COMPETITORS[:12]); rows=[]
+    for n,d in PRESS: rows+=parse(f'site:{d} ({names}) {AI}',n,'Press & Media',None,10)
+    return derive(pd.DataFrame(rows))
+@st.cache_data(ttl=86400,show_spinner=False)
+def fetch_consulting():
+    rows=[]
+    for n,d in CONSULTING: rows+=parse(f'site:{d} {LOGISTICS} {AI}',n,'Consulting & Market Intelligence',None,8)
+    return derive(pd.DataFrame(rows))
 
-def map_value_chain(title):
-    t = (title or "").lower()
-    steps = []
-    def add(step):
-        if step not in steps:
-            steps.append(step)
-    if any(k in t for k in ["quote","quotation","pricing","rate","booking","procurement","commercial"]):
-        add("Booking & pricing")
-    if any(k in t for k in ["document","compliance","paperwork","invoice"]):
-        add("Docs & compliance")
-    if any(k in t for k in ["warehouse","wms","consolidation","inventory","fulfillment","fulfilment"]):
-        add("Collection & consolidation")
-    if any(k in t for k in ["customs","tariff","duty","clearance","brokerage"]):
-        add("Customs clearance (origin)")
-        add("Customs clearance (dest.)")
-    if any(k in t for k in ["security","inspection","screening","handling"]):
-        add("Security & handling")
-    if any(k in t for k in ["air freight","ocean freight","sea freight","capacity","routing","route","eta","shipment","network"]):
-        add("Air / ocean transport")
-    if any(k in t for k in ["delivery","trucking","truck","last mile","distribution"]):
-        add("Decons. & delivery")
-    if any(k in t for k in ["audit","settlement","billing","payment","reconciliation"]):
-        add("Audit & settlement")
-    if any(k in t for k in ["agentic ai","ai strategy","artificial intelligence strategy","digital transformation"]):
-        return VALUE_CHAIN_STEPS[1:]
-    return steps or ["Air / ocean transport"]
+qp=st.query_params; selected_company=qp.get('competitor','All competitors')
+if selected_company not in COMPETITORS and selected_company!='All competitors': selected_company='All competitors'
+st.markdown(f'<div class="hero"><div><div class="hero-title">CEVA AI Intelligence Dashboard</div><div class="hero-sub">Competitor Moves | Market Insights | Strategic Implications</div></div><div class="hero-meta">Last checked<br><b>{datetime.now().strftime("%d %b %Y • %H:%M")}</b><br>Auto-refresh: every 24 hours</div></div>',unsafe_allow_html=True)
+with st.spinner('Refreshing intelligence sources…'):
+    official_df=fetch_official(); press_df=fetch_press(); consulting_df=fetch_consulting()
+# ticker
+ticker=pd.concat([official_df.assign(rank=1),press_df.assign(rank=2),consulting_df.assign(rank=3)],ignore_index=True)
+ticker=ticker[ticker['age_days']<=30].sort_values(['date','rank'],ascending=[False,True]).head(12)
+items=[]
+for _,r in ticker.iterrows():
+    lab='OFFICIAL' if r['source_category']=='Official' else ('MEDIA' if r['source_category']=='Press & Media' else 'REPORT')
+    items.append(f'<span class="ticker-item"><span class="ticker-new">{lab}</span>{r["date"].strftime("%d %b")} &nbsp; <a href="{html.escape(r["url"],quote=True)}" target="_blank">{html.escape(r["title"])}</a></span>')
+st.markdown('<div class="ticker-wrap"><div class="ticker-label">DAILY AI INTELLIGENCE</div><div class="ticker-window"><div class="ticker-track">'+(''.join(items) if items else 'No new items in the last 30 days.')+'</div></div></div>',unsafe_allow_html=True)
+# filters
+c1,c2,c3,c4=st.columns([2.1,1,1,1])
+with c1: search=st.text_input('Search',placeholder='Search competitor, AI topic, customs, pricing…',label_visibility='collapsed')
+with c2: source_filter=st.selectbox('Source type',['All sources','Official','Press & Media','Consulting & Market Intelligence'],label_visibility='collapsed')
+with c3: period=st.selectbox('Date range',['Last 7 days','Last 30 days','Last 90 days','Last 12 months'],index=1,label_visibility='collapsed')
+with c4:
+    if st.button('Refresh now',use_container_width=True): st.cache_data.clear(); st.rerun()
+# clickable logos
+st.markdown('<div class="section-title">SELECT COMPETITOR — click a logo to filter the entire dashboard</div>',unsafe_allow_html=True)
+g=['<div class="competitor-grid">']; cls='competitor-card selected' if selected_company=='All competitors' else 'competitor-card'; g.append(f'<a href="?competitor=All%20competitors"><div class="{cls}"><div class="all-card">ALL<br>COMPETITORS</div></div></a>')
+for c in COMPETITORS:
+    cls='competitor-card selected' if selected_company==c else 'competitor-card'; href='?competitor='+urllib.parse.quote(c); src=LOGOS.get(c); body=f'<img src="{src}" alt="{html.escape(c)}">' if src else f'<div class="all-card">{html.escape(c)}</div>'; g.append(f'<a href="{href}"><div class="{cls}">{body}</div></a>')
+g.append('</div>'); st.markdown(''.join(g),unsafe_allow_html=True)
+st.markdown('<div class="section-title">FILTER BY FREIGHT VALUE CHAIN STEP</div>',unsafe_allow_html=True); selected_step=st.radio('Value chain',VALUE_CHAIN,horizontal=True,label_visibility='collapsed')
+days={'Last 7 days':7,'Last 30 days':30,'Last 90 days':90,'Last 12 months':365}[period]
+def filt(df,industry=False):
+    if df.empty:return df
+    x=df[df['age_days']<=days].copy()
+    if selected_company!='All competitors': x=x[(x['company']==selected_company)|(x['company']=='Industry')] if industry else x[x['company']==selected_company]
+    if selected_step!='All steps': x=x[x['value_chain'].apply(lambda a:selected_step in a)]
+    if search:
+        s=search.lower(); x=x[x['title'].str.lower().str.contains(s,na=False)|x['publisher'].str.lower().str.contains(s,na=False)|x['company'].str.lower().str.contains(s,na=False)]
+    return x
+fo=filt(official_df); fp=filt(press_df); fc=filt(consulting_df,True)
+if source_filter=='Official': fp=fp.iloc[0:0]; fc=fc.iloc[0:0]
+elif source_filter=='Press & Media': fo=fo.iloc[0:0]; fc=fc.iloc[0:0]
+elif source_filter=='Consulting & Market Intelligence': fo=fo.iloc[0:0]; fp=fp.iloc[0:0]
+cols=st.columns(5)
+for col,(lab,val,red) in zip(cols,[('Total intelligence items',len(fo)+len(fp)+len(fc),False),('Official competitor sources',len(fo),False),('Press & media',len(fp),True),('Consulting & market intelligence',len(fc),False),('Competitors tracked',20,False)]):
+    col.markdown(f'<div class="kpi{" red" if red else ""}"><div class="kpi-label">{lab}</div><div class="kpi-value">{val}</div></div>',unsafe_allow_html=True)
 
-@st.cache_data(ttl=86400, show_spinner=False)
-def live_official_news():
-    rows = []
-    for company, query in OFFICIAL_SEARCHES.items():
-        rows.extend(fetch_official(query, company))
-    df = pd.DataFrame(rows)
-    if df.empty:
-        return df
-    df["date"] = pd.to_datetime(df["date"], utc=True)
-    df["value_chain"] = df["title"].apply(map_value_chain)
-    df["age_days"] = (pd.Timestamp.now(tz="UTC") - df["date"]).dt.total_seconds() / 86400
-    return df.sort_values("date", ascending=False).drop_duplicates("title")
+def render(df,kind,n=30):
+    if df.empty: st.info('No items match the current filters.'); return
+    for _,r in df.head(n).iterrows():
+        badge='OFFICIAL SOURCE' if kind=='official' else ('PRESS & MEDIA' if kind=='media' else 'MARKET INTELLIGENCE'); bcls=' red' if kind=='media' else ''; cls=kind; tags=''.join(f'<span class="tag">{html.escape(x)}</span>' for x in r['value_chain'])
+        st.markdown(f'<div class="news-card {cls}"><span class="badge{bcls}">{badge}</span><div class="news-title"><a href="{html.escape(r["url"],quote=True)}" target="_blank">{html.escape(r["title"])}</a></div><div class="news-meta">{r["date"].strftime("%d %b %Y")} • {html.escape(r["company"])} • {html.escape(r["publisher"])}</div><div>{tags}</div></div>',unsafe_allow_html=True)
 
-# Header
-st.markdown(
-    f"""
-    <div class="hero">
-      <div>
-        <div class="hero-title">CEVA AI Competitor Intelligence</div>
-        <div class="hero-sub">Real-time updates. Verified sources. Actionable insights.</div>
-      </div>
-      <div class="hero-updated">Last checked<br><b>{datetime.now().strftime("%d %b %Y • %H:%M")}</b></div>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-
-logo_html = '<div class="logo-strip">'
-for company in COMPETITORS:
-    if company in LOGOS:
-        logo_html += f'<div class="logo-cell"><img src="{LOGOS[company]}" alt="{company}"></div>'
+tabs=st.tabs(['Executive View','Official Competitor Intelligence','Press & Media Intelligence','Consulting & Market Intelligence','Competitor Analysis'])
+with tabs[0]:
+    a,b,c=st.columns(3)
+    with a: st.markdown('<div class="source-head blue">Official Competitor Intelligence<div class="source-sub">Company newsrooms, investor relations, filings and official announcements.</div></div>',unsafe_allow_html=True); render(fo,'official',6)
+    with b: st.markdown('<div class="source-head red">Press & Media Intelligence<div class="source-sub">Reliable business and logistics press for external interpretation and context.</div></div>',unsafe_allow_html=True); render(fp,'media',6)
+    with c: st.markdown('<div class="source-head blue">Consulting & Market Intelligence<div class="source-sub">Consulting firms, research houses and market-intelligence providers.</div></div>',unsafe_allow_html=True); render(fc,'consulting',6)
+    st.markdown(f'<div class="takeaway"><b>Key takeaway for CEVA:</b> current filtered view = <b>{len(fo)}</b> official items, <b>{len(fp)}</b> press/media items and <b>{len(fc)}</b> consulting/market-intelligence items.</div>',unsafe_allow_html=True)
+with tabs[1]: st.markdown('### Official Competitor Intelligence'); render(fo,'official',60)
+with tabs[2]: st.markdown('### Reliable Press & Media Intelligence'); render(fp,'media',60)
+with tabs[3]: st.markdown('### Consulting & Market Intelligence'); render(fc,'consulting',60)
+with tabs[4]:
+    st.markdown('### Competitor Analysis'); ana=pd.concat([fo,fp,fc],ignore_index=True)
+    if ana.empty: st.info('No data for current filters.')
     else:
-        logo_html += f'<div class="logo-cell">{company}</div>'
-logo_html += "</div>"
-st.markdown(logo_html, unsafe_allow_html=True)
-
-verified = pd.DataFrame(VERIFIED)
-verified["date"] = pd.to_datetime(verified["date"])
-today = pd.Timestamp.now(tz="UTC").tz_localize(None).normalize()
-verified["age_days"] = (today - verified["date"]).dt.days
-
-with st.sidebar:
-    st.markdown("## Filters")
-    search = st.text_input("Search", placeholder="Initiatives, technologies, keywords…")
-    selected_comp = st.multiselect("Competitor", COMPETITORS, default=COMPETITORS)
-    selected_tech = st.multiselect("Technology", sorted(verified["technology"].unique().tolist()))
-    selected_stage = st.multiselect("Deployment stage", sorted(verified["stage"].unique().tolist()))
-    priority = st.selectbox("Priority", ["All","Priority","Neutral"])
-    period = st.radio("Date range", ["Last 7 days","Last 30 days","Last 90 days","Last 12 months","All 2026"], index=1)
-    if st.button("Refresh sources now", use_container_width=True):
-        st.cache_data.clear()
-        st.rerun()
-    st.caption("Official-source discovery refreshes automatically every 24 hours.")
-
-st.markdown('<div class="valuechain-title">FREIGHT VALUE CHAIN — click a step to filter the news and insights</div>', unsafe_allow_html=True)
-selected_step = st.radio("Freight value chain", VALUE_CHAIN_STEPS, horizontal=True, label_visibility="collapsed")
-
-days_map = {"Last 7 days":7,"Last 30 days":30,"Last 90 days":90,"Last 12 months":365,"All 2026":9999}
-max_days = days_map[period]
-
-view = verified[(verified["company"].isin(selected_comp)) & (verified["age_days"] <= max_days)].copy()
-if selected_step != "All steps":
-    view = view[view["value_chain"].apply(lambda x: selected_step in x)]
-if selected_tech:
-    view = view[view["technology"].isin(selected_tech)]
-if selected_stage:
-    view = view[view["stage"].isin(selected_stage)]
-if priority != "All":
-    view = view[view["priority"] == priority]
-if search:
-    view = view[
-        view["initiative"].str.contains(search, case=False, na=False)
-        | view["technology"].str.contains(search, case=False, na=False)
-        | view["evidence"].str.contains(search, case=False, na=False)
-        | view["company"].str.contains(search, case=False, na=False)
-    ]
-view = view.sort_values("date", ascending=False)
-
-recent30 = verified[verified["age_days"] <= 30]
-active_stages = {
-    "Launched","Scaling","Scaling capability","Global rollout",
-    "Enhanced production service","Commercial operation","Scaled multi-use-case deployment",
-}
-active_share = verified["stage"].isin(active_stages).mean()
-
-kpi_cols = st.columns(5)
-kpi_data = [
-    ("Verified AI initiatives", len(verified), False),
-    ("Competitors monitored", verified["company"].nunique(), False),
-    ("In deployment or live", f"{active_share:.0%}", False),
-    ("Freight value-chain steps", 9, False),
-    ("New in last 30 days", len(recent30), True),
-]
-for col, (label, value, red_flag) in zip(kpi_cols, kpi_data):
-    cls = "kpi red" if red_flag else "kpi"
-    col.markdown(f'<div class="{cls}"><div class="kpi-label">{label}</div><div class="kpi-value">{value}</div></div>', unsafe_allow_html=True)
-
-st.markdown("")
-tab1, tab2, tab3 = st.tabs(["AI Initiatives & News","Live official-source watcher","Competitor analysis"])
-
-with tab1:
-    step_label = selected_step if selected_step != "All steps" else "all value-chain steps"
-    st.markdown(f"### Verified initiatives — {step_label}")
-    st.caption(f"{len(view)} result(s) • {period} • most recent first")
-    if view.empty:
-        st.info("No verified initiatives match the current filters. Expand the date range or choose another step.")
-    else:
-        for _, row in view.iterrows():
-            cls = "priority" if row["priority"] == "Priority" else "normal"
-            imp_cls = "priority" if row["priority"] == "Priority" else ""
-            fresh = '<span class="tag tag-red">NEW</span>' if row["age_days"] <= 30 else ""
-            logo = LOGOS.get(row["company"])
-            company_html = (
-                f'<img src="{logo}" style="height:19px;max-width:105px;object-fit:contain;vertical-align:middle;margin-right:8px;">'
-                if logo else f"<b>{row['company']}</b>"
-            )
-            chain_tags = "".join(f'<span class="tag">{s}</span>' for s in row["value_chain"])
-            st.markdown(
-                f"""
-                <div class="news-card {cls}">
-                  <div>{fresh}{company_html}<span class="tag">{row['stage']}</span></div>
-                  <div class="news-title">{row['initiative']}</div>
-                  <div class="news-meta">{row['date'].strftime('%d %b %Y')} • {row['source']} • {row['source_type']}</div>
-                  <div>{row['evidence']}</div>
-                  <div style="margin-top:7px;"><b style="color:{BLUE};">Metric:</b> {row['metric']}</div>
-                  <div style="margin-top:7px;">{chain_tags}</div>
-                  <div class="implication {imp_cls}"><b>CEVA implication:</b> {row['ceva']}</div>
-                  <div style="margin-top:8px;"><a href="{row['url']}" target="_blank"><b>Open official source ↗</b></a></div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
-with tab2:
-    st.markdown("### Live official-source watcher")
-    st.caption("Fresh discovery layer. Important items should be validated against the original linked source before executive use.")
-    with st.spinner("Checking official-source feeds…"):
-        live = live_official_news()
-    if live.empty:
-        st.warning("Live feeds are temporarily unavailable. Verified intelligence remains available in the first tab.")
-    else:
-        live = live[(live["age_days"] <= max_days) & (live["company"].isin(selected_comp))]
-        if selected_step != "All steps":
-            live = live[live["value_chain"].apply(lambda x: selected_step in x)]
-        if search:
-            live = live[live["title"].str.contains(search, case=False, na=False)]
-        st.caption(f"{len(live)} headline(s) match the current filters.")
-        for _, row in live.head(50).iterrows():
-            steps = " • ".join(row["value_chain"])
-            st.markdown(
-                f"""
-                <div class="news-card normal">
-                  <span class="badge-green">LIVE SOURCE WATCH</span>
-                  <div class="news-title"><a href="{row['url']}" target="_blank">{row['title']}</a></div>
-                  <div class="news-meta">{row['date'].strftime('%d %b %Y')} • {row['company']} • {row['publisher']}</div>
-                  <div style="font-size:.8rem;color:{MUTED};">Mapped value chain: {steps}</div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
-with tab3:
-    st.markdown("### Competitor signals")
-    comp = view.groupby("company").agg(
-        initiatives=("initiative","count"),
-        priority=("priority", lambda x: int((x == "Priority").sum())),
-        technologies=("technology","nunique"),
-    ).reset_index()
-    if comp.empty:
-        st.info("No data for the current filters.")
-    else:
-        chart = alt.Chart(comp).mark_bar(color=BLUE).encode(
-            x=alt.X("initiatives:Q", title="Verified initiatives"),
-            y=alt.Y("company:N", sort="-x", title=""),
-            tooltip=["company","initiatives","priority","technologies"],
-        ).properties(height=250)
-        st.altair_chart(chart, use_container_width=True)
-
-        tech = view.groupby("technology").size().reset_index(name="initiatives").sort_values("initiatives", ascending=False)
-        chart2 = alt.Chart(tech).mark_bar(color=RED).encode(
-            x=alt.X("initiatives:Q", title="Initiatives"),
-            y=alt.Y("technology:N", sort="-x", title=""),
-            tooltip=["technology","initiatives"],
-        ).properties(height=300)
-        st.altair_chart(chart2, use_container_width=True)
-
-        lead = comp.sort_values(["initiatives","priority"], ascending=False).iloc[0]["company"]
-        st.markdown("#### Strategic readout")
-        st.write(f"**{lead}** has the highest number of verified initiatives in the current filtered view.")
-        if selected_step != "All steps":
-            st.write(f"This comparison is filtered specifically to **{selected_step}**.")
-        st.write("Prioritise moves that alter forwarding economics, customer experience, speed of execution or control over data.")
-
-st.divider()
-st.caption("Primary sources are prioritised. The live watcher is a discovery layer and should be validated against the underlying source.")
+        comp=ana[ana['company']!='Industry'].groupby('company').size().reset_index(name='items').sort_values('items',ascending=False)
+        if not comp.empty:
+            st.altair_chart(alt.Chart(comp).mark_bar(color=BLUE).encode(x=alt.X('items:Q',title='Intelligence items'),y=alt.Y('company:N',sort='-x',title=''),tooltip=['company','items']).properties(height=450),use_container_width=True)
+        vc=[]
+        for _,r in ana.iterrows(): vc.extend(r['value_chain'])
+        if vc:
+            v=pd.Series(vc).value_counts().reset_index(); v.columns=['value_chain_step','items']; st.altair_chart(alt.Chart(v).mark_bar(color=RED).encode(x='items:Q',y=alt.Y('value_chain_step:N',sort='-x',title=''),tooltip=['value_chain_step','items']).properties(height=350),use_container_width=True)
+st.divider(); st.caption('Source hierarchy: official competitor evidence first; reliable press/media second; consulting and market intelligence for broader benchmarks. Validate important intelligence against the linked original source.')
